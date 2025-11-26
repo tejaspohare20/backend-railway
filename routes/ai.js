@@ -114,6 +114,7 @@ router.get('/analytics', authMiddleware, async (req, res) => {
 router.post('/chat', authMiddleware, async (req, res) => {
   try {
     const { message, history } = req.body;
+    console.log('AI chat request received:', { message, historyLength: history?.length || 0 });
 
     if (!message) {
       return res.status(400).json({ message: 'Message is required' });
@@ -121,9 +122,11 @@ router.post('/chat', authMiddleware, async (req, res) => {
 
     // Get AI chat response
     const reply = await aiService.getChatResponse(message, history || []);
+    console.log('AI chat response generated:', reply.substring(0, 100) + '...');
 
     res.json({ reply });
   } catch (error) {
+    console.error('Chat error:', error);
     res.status(500).json({ message: 'Failed to get chat response', error: error.message });
   }
 });

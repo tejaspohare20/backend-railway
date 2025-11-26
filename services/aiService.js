@@ -1,14 +1,50 @@
-import Groq from 'groq-sdk';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const groq = new Groq({
-  apiKey: process.env.GROQ_API_KEY
-});
+// Remove dotenv import since it should be loaded by the server
+// import dotenv from 'dotenv';
+// dotenv.config();
 
 class AIService {
+  constructor() {
+    this.groq = null;
+    this.initialized = false;
+  }
+
+  async initialize() {
+    if (this.initialized) return;
+    
+    if (process.env.GROQ_API_KEY) {
+      const Groq = (await import('groq-sdk')).default;
+      this.groq = new Groq({
+        apiKey: process.env.GROQ_API_KEY
+      });
+      console.log('✅ Groq API initialized successfully');
+    } else {
+      console.log('⚠️ Groq API not initialized - missing API key');
+    }
+    this.initialized = true;
+  }
+
   async analyzeSpeech(transcript, duration) {
+    await this.initialize();
+    
+    // If Groq is not initialized, return fallback response
+    if (!this.groq) {
+      console.warn('AI service not available - returning fallback response');
+      return {
+        score: 75,
+        clarity: 70,
+        pace: 75,
+        vocabulary: 80,
+        confidence: 70,
+        fillerWords: 5,
+        feedback: "Great practice session! Keep working on clarity and reducing filler words. Your vocabulary is good, and you're showing confidence in your delivery.",
+        suggestions: [
+          "Practice slowing down on key points",
+          "Reduce filler words like 'um' and 'uh'",
+          "Pause more intentionally between ideas"
+        ]
+      };
+    }
+
     try {
       const prompt = `
 You are an expert speech coach analyzing a practice session. 
@@ -39,13 +75,15 @@ Format your response as JSON with these fields:
 }
 `;
 
-      const completion = await groq.chat.completions.create({
+      console.log('Sending speech analysis request to Groq API');
+      const completion = await this.groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
       });
       
       const text = completion.choices[0].message.content;
+      console.log('Received response from Groq API for speech analysis');
       
       // Extract JSON from response (handle markdown code blocks if present)
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -75,16 +113,30 @@ Format your response as JSON with these fields:
   }
 
   async generatePracticeTopic() {
+    await this.initialize();
+    
+    // If Groq is not initialized, return fallback response
+    if (!this.groq) {
+      console.warn('AI service not available - returning fallback response');
+      return {
+        topic: "Tell your success story",
+        description: "Share a moment when you overcame a challenge and achieved something meaningful",
+        tips: ["Start with context", "Build tension", "End with the lesson learned"]
+      };
+    }
+
     try {
       const prompt = 'You are a creative speech coach. Generate an interesting speaking practice topic or scenario. Format your response as JSON with these fields: {"topic": "title", "description": "brief description", "tips": ["tip1", "tip2"]}';
       
-      const completion = await groq.chat.completions.create({
+      console.log('Sending topic generation request to Groq API');
+      const completion = await this.groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.8,
       });
       
       const text = completion.choices[0].message.content;
+      console.log('Received response from Groq API for topic generation');
       
       // Extract JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -102,16 +154,31 @@ Format your response as JSON with these fields:
   }
 
   async getMicroLearningContent(topic) {
+    await this.initialize();
+    
+    // If Groq is not initialized, return fallback response
+    if (!this.groq) {
+      console.warn('AI service not available - returning fallback response');
+      return {
+        title: topic,
+        content: "Learn effective communication techniques",
+        keyPoints: ["Clarity", "Confidence", "Connection"],
+        practice: "Practice speaking clearly for 2 minutes"
+      };
+    }
+
     try {
       const prompt = `You are an expert communication teacher creating bite-sized learning content. Create a micro-learning lesson about: ${topic}. Format your response as JSON with these fields: {"title": "lesson title", "content": "brief content", "keyPoints": ["point1", "point2"], "practice": "exercise description"}`;
       
-      const completion = await groq.chat.completions.create({
+      console.log('Sending micro-learning request to Groq API');
+      const completion = await this.groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.7,
       });
       
       const text = completion.choices[0].message.content;
+      console.log('Received response from Groq API for micro-learning');
       
       // Extract JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -130,6 +197,14 @@ Format your response as JSON with these fields:
   }
 
   async getChatResponse(message, history = []) {
+    await this.initialize();
+    
+    // If Groq is not initialized, return fallback response
+    if (!this.groq) {
+      console.warn('AI service not available - returning fallback response');
+      return this.getRuleBasedResponse(message);
+    }
+
     try {
       // Build messages array for OpenAI chat
       const messages = [
@@ -141,6 +216,7 @@ Format your response as JSON with these fields:
       
       // Add conversation history
       if (history.length > 0) {
+        console.log('Adding conversation history to chat request');
         history.forEach(msg => {
           messages.push({
             role: msg.role === 'user' ? 'user' : 'assistant',
@@ -152,13 +228,15 @@ Format your response as JSON with these fields:
       // Add current message
       messages.push({ role: "user", content: message });
       
-      const completion = await groq.chat.completions.create({
+      console.log('Sending chat request to Groq API with message:', message);
+      const completion = await this.groq.chat.completions.create({
         model: "llama-3.3-70b-versatile",
         messages: messages,
         temperature: 0.7,
       });
       
       const reply = completion.choices[0].message.content;
+      console.log('Received response from Groq API for chat:', reply);
       
       return reply.trim();
     } catch (error) {
@@ -169,6 +247,7 @@ Format your response as JSON with these fields:
   }
 
   getRuleBasedResponse(message) {
+    console.log('Using rule-based response for message:', message);
     const lowerMessage = message.toLowerCase();
     
     // Greeting responses

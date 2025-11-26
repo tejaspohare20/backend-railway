@@ -1,13 +1,33 @@
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+// Get the directory name of the current module
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Specify the exact path to the .env file
+const envPath = path.resolve(__dirname, '.env');
+console.log('Loading .env from:', envPath);
+
+const result = dotenv.config({ path: envPath });
+console.log('Dotenv result:', result);
+
+// Log environment variables for debugging (remove in production)
+console.log('Environment variables:');
+console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Loaded' : 'Not found');
+console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Loaded' : 'Not found');
+console.log('GROQ_API_KEY:', process.env.GROQ_API_KEY ? 'Loaded' : 'Not found');
+
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 
-// Import routes
+// Import routes (except AI routes which will be imported dynamically)
 import authRoutes from './routes/auth.js';
-import aiRoutes from './routes/ai.js';
 import progressRoutes from './routes/progress.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import achievementsRoutes from './routes/achievements.js';
@@ -15,20 +35,32 @@ import microLearningRoutes from './routes/microLearning.js';
 import adminRoutes from './routes/admin.js';
 import contactsRoutes from './routes/contacts.js';
 
-dotenv.config();
+// Import AI routes separately to avoid early loading issues
+let aiRoutes;
+try {
+  if (process.env.GROQ_API_KEY) {
+    const aiModule = await import('./routes/ai.js');
+    aiRoutes = aiModule.default;
+    console.log('✅ AI routes loaded successfully');
+  } else {
+    console.log('⚠️ AI routes disabled due to missing GROQ_API_KEY');
+  }
+} catch (error) {
+  console.warn('Failed to load AI routes:', error.message);
+}
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173"],
+    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://vercel-frontend-phi-one.vercel.app"],
     methods: ["GET", "POST"]
   }
 });
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001'],
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001', 'https://vercel-frontend-phi-one.vercel.app'],
   credentials: true
 }));
 app.use(express.json());
@@ -40,19 +72,61 @@ app.use((req, res, next) => {
 });
 
 // MongoDB Connection
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('✅ MongoDB connected successfully'))
-  .catch((err) => console.error('❌ MongoDB connection error:', err));
+if (process.env.MONGODB_URI) {
+  mongoose.connect(process.env.MONGODB_URI)
+    .then(() => console.log('✅ MongoDB connected successfully'))
+    .catch((err) => console.error('❌ MongoDB connection error:', err));
+
+  // Add connection event listeners for better debugging
+  mongoose.connection.on('connected', () => {
+    console.log('Mongoose connected to DB');
+  });
+
+  mongoose.connection.on('error', (err) => {
+    console.error('Mongoose connection error:', err);
+  });
+
+  mongoose.connection.on('disconnected', () => {
+    console.log('Mongoose disconnected');
+  });
+} else {
+  console.error('❌ MONGODB_URI is not defined in environment variables');
+}
 
 // Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/ai', aiRoutes);
+if (aiRoutes) {
+  app.use('/api/ai', aiRoutes);
+}
 app.use('/api/progress', progressRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/achievements', achievementsRoutes);
 app.use('/api/micro-learning', microLearningRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/contacts', contactsRoutes);
+
+// Serve static files from the React app build directory in production
+if (process.env.NODE_ENV === 'production') {
+  const path = (await import('path')).default;
+  const __dirname = (await import('path')).dirname(fileURLToPath(import.meta.url));
+  
+  app.use(express.static(path.join(__dirname, '../dist')));
+  
+  // Catch-all handler for client-side routing
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/index.html'));
+  });
+}
+
+// Add a health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+const PORT = process.env.PORT || 5002;
+httpServer.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
 
 // Socket.IO for peer chat - Random matching system
 let waitingUsers = [];
@@ -80,6 +154,8 @@ io.on('connection', (socket) => {
     const userName = data?.userName || 'Anonymous';
     socket.userName = userName;
     
+    console.log(`User ${socket.id} (${userName}) joined chat`);
+    
     // Add to online users
     onlineUsers.set(socket.id, { userName, socketId: socket.id });
     broadcastOnlineStats();
@@ -88,6 +164,8 @@ io.on('connection', (socket) => {
     if (waitingUsers.length > 0) {
       const peer = waitingUsers.shift();
       const roomId = `room_${socket.id}_${peer.id}`;
+      
+      console.log(`Matching ${socket.id} (${userName}) with ${peer.id} (${peer.userName}) in room ${roomId}`);
       
       // Both users join the same room
       socket.join(roomId);
@@ -115,19 +193,21 @@ io.on('connection', (socket) => {
   socket.on('message', (data) => {
     const roomInfo = activeRooms.get(socket.id);
     if (roomInfo) {
+      console.log(`Message from ${socket.id} (${socket.userName}): ${data.message}`);
       socket.to(roomInfo.roomId).emit('message', {
         message: data.message,
         sender: socket.userName,
         timestamp: new Date()
       });
+    } else {
+      console.log(`Message from ${socket.id} (${socket.userName}) but no room info found`);
     }
   });
 
   // WebRTC signaling
   socket.on('voice-call-request', (data) => {
-    console.log(`Voice call request from ${socket.id} (${socket.userName})`);
+    console.log(`📞 Voice call request from ${socket.id} (${socket.userName})`);
     const roomInfo = activeRooms.get(socket.id);
-    console.log('Room info:', roomInfo);
     if (roomInfo) {
       console.log(`Sending voice-call-request to room ${roomInfo.roomId}`);
       socket.to(roomInfo.roomId).emit('voice-call-request', { from: socket.userName });
@@ -138,6 +218,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('voice-call-accepted', () => {
+    console.log(`✅ Voice call accepted by ${socket.id} (${socket.userName})`);
     const roomInfo = activeRooms.get(socket.id);
     if (roomInfo) {
       socket.to(roomInfo.roomId).emit('voice-call-accepted');
@@ -145,6 +226,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('voice-call-rejected', () => {
+    console.log(`❌ Voice call rejected by ${socket.id} (${socket.userName})`);
     const roomInfo = activeRooms.get(socket.id);
     if (roomInfo) {
       socket.to(roomInfo.roomId).emit('voice-call-rejected');
@@ -152,6 +234,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('voice-call-offer', (data) => {
+    console.log(`📡 Voice call offer from ${socket.id} (${socket.userName})`);
     const roomInfo = activeRooms.get(socket.id);
     if (roomInfo) {
       socket.to(roomInfo.roomId).emit('voice-call-offer', data);
@@ -159,6 +242,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('voice-call-answer', (data) => {
+    console.log(`📡 Voice call answer from ${socket.id} (${socket.userName})`);
     const roomInfo = activeRooms.get(socket.id);
     if (roomInfo) {
       socket.to(roomInfo.roomId).emit('voice-call-answer', data);
@@ -166,6 +250,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('ice-candidate', (data) => {
+    console.log(`🧊 ICE candidate from ${socket.id} (${socket.userName})`);
     const roomInfo = activeRooms.get(socket.id);
     if (roomInfo) {
       socket.to(roomInfo.roomId).emit('ice-candidate', data);
@@ -173,6 +258,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('voice-call-ended', () => {
+    console.log(`☎️ Voice call ended by ${socket.id} (${socket.userName})`);
     const roomInfo = activeRooms.get(socket.id);
     if (roomInfo) {
       socket.to(roomInfo.roomId).emit('voice-call-ended');
@@ -219,10 +305,4 @@ io.on('connection', (socket) => {
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Something went wrong!', error: err.message });
-});
-
-const PORT = process.env.PORT || 5002;
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📡 Socket.IO ready for connections`);
 });
