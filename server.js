@@ -7,15 +7,20 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Specify the exact path to the .env file
+// Load environment variables - handle missing .env file gracefully
 const envPath = path.resolve(__dirname, '.env');
 console.log('Loading .env from:', envPath);
 
+// Try to load .env file, but don't fail if it doesn't exist (for Render)
 const result = dotenv.config({ path: envPath });
-console.log('Dotenv result:', result);
 
-// Log environment variables for debugging (remove in production)
-console.log('Environment variables:');
+// Only log dotenv error if it's not the missing file error
+if (result.error && result.error.code !== 'ENOENT') {
+  console.error('Dotenv error:', result.error);
+}
+
+// Log which environment variables are loaded (don't log actual values for security)
+console.log('Environment variables status:');
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Loaded' : 'Not found');
 console.log('JWT_SECRET:', process.env.JWT_SECRET ? 'Loaded' : 'Not found');
 console.log('GROQ_API_KEY:', process.env.GROQ_API_KEY ? 'Loaded' : 'Not found');
@@ -25,6 +30,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import fs from 'fs';
 
 // Import routes (except AI routes which will be imported dynamically)
 import authRoutes from './routes/auth.js';
@@ -53,14 +59,14 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://vercel-frontend-phi-one.vercel.app"],
+    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://vercel-frontend-phi-one.vercel.app", "https://frontend-one-delta-75.vercel.app", "https://frontend-afhi.vercel.app"],
     methods: ["GET", "POST"]
   }
 });
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001', 'https://vercel-frontend-phi-one.vercel.app'],
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001', 'https://vercel-frontend-phi-one.vercel.app', 'https://frontend-one-delta-75.vercel.app', 'https://frontend-afhi.vercel.app'],
   credentials: true
 }));
 app.use(express.json());
@@ -106,16 +112,43 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/contacts', contactsRoutes);
 
 // Serve static files from the React app build directory in production
+// Note: This is only for when frontend and backend are deployed together
+// Since you're deploying frontend separately on Vercel, this section will not serve files
 if (process.env.NODE_ENV === 'production') {
-  const path = (await import('path')).default;
-  const __dirname = (await import('path')).dirname(fileURLToPath(import.meta.url));
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  const distPath = path.join(__dirname, '../dist');
   
-  app.use(express.static(path.join(__dirname, '../dist')));
-  
-  // Catch-all handler for client-side routing
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../dist/index.html'));
-  });
+  // Check if dist directory exists before serving static files
+  if (fs.existsSync(distPath)) {
+    console.log('Serving static files from:', distPath);
+    app.use(express.static(distPath));
+    
+    // Catch-all handler for client-side routing
+    app.get('*', (req, res) => {
+      const indexPath = path.join(distPath, 'index.html');
+      // Check if index.html exists before serving it
+      if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+      } else {
+        // If index.html doesn't exist, send a simple API response
+        res.status(404).json({ 
+          message: 'Frontend files not found. This is a backend API server.', 
+          apiDocs: '/health',
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+  } else {
+    console.log('Dist directory not found, skipping static file serving. This is normal when frontend is deployed separately.');
+    // Add a simple catch-all for when there's no frontend
+    app.get('*', (req, res) => {
+      res.status(404).json({ 
+        message: 'Frontend files not found. This is a backend API server.', 
+        apiDocs: '/health',
+        timestamp: new Date().toISOString()
+      });
+    });
+  }
 }
 
 // Add a health check endpoint
