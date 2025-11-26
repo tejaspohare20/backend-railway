@@ -6,7 +6,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "build-frontend": "cd ../ && npm run build",
+    "postinstall": "npm run build-frontend"
   },
   "keywords": [
     "ai",

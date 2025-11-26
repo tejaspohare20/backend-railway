@@ -112,8 +112,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/contacts', contactsRoutes);
 
 // Serve static files from the React app build directory in production
-// Note: This is only for when frontend and backend are deployed together
-// Since you're deploying frontend separately on Vercel, this section will not serve files
+// This is for when frontend and backend are deployed together on platforms like Cyclic.sh
 if (process.env.NODE_ENV === 'production') {
   const __dirname = dirname(fileURLToPath(import.meta.url));
   const distPath = path.join(__dirname, '../dist');
@@ -139,7 +138,7 @@ if (process.env.NODE_ENV === 'production') {
       }
     });
   } else {
-    console.log('Dist directory not found, skipping static file serving. This is normal when frontend is deployed separately.');
+    console.log('Dist directory not found, API-only mode.');
     // Add a simple catch-all for when there's no frontend
     app.get('*', (req, res) => {
       res.status(404).json({ 
