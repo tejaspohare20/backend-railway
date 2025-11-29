@@ -38,6 +38,7 @@ import progressRoutes from './routes/progress.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import achievementsRoutes from './routes/achievements.js';
 import microLearningRoutes from './routes/microLearning.js';
+import MicroLesson from './models/MicroLesson.js'; // Import to ensure model is registered
 import adminRoutes from './routes/admin.js';
 import contactsRoutes from './routes/contacts.js';
 
@@ -59,14 +60,14 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://vercel-frontend-phi-one.vercel.app", "https://frontend-one-delta-75.vercel.app", "https://frontend-afhi.vercel.app", "https://frontend-xz1t.vercel.app"],
+    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://vercel-frontend-phi-one.vercel.app", "https://frontend-one-delta-75.vercel.app", "https://frontend-afhi.vercel.app", "https://frontend-xz1t.vercel.app", "https://frontend-vercel-ws88.vercel.app"],
     methods: ["GET", "POST"]
   }
 });
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001', 'https://vercel-frontend-phi-one.vercel.app', 'https://frontend-one-delta-75.vercel.app', 'https://frontend-afhi.vercel.app', 'https://frontend-xz1t.vercel.app'],
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001', 'https://vercel-frontend-phi-one.vercel.app', 'https://frontend-one-delta-75.vercel.app', 'https://frontend-afhi.vercel.app', 'https://frontend-xz1t.vercel.app', 'https://frontend-vercel-ws88.vercel.app'],
   credentials: true
 }));
 app.use(express.json());
@@ -163,7 +164,7 @@ httpServer.listen(PORT, () => {
 // Socket.IO for peer chat - Random matching system
 let waitingUsers = [];
 const activeRooms = new Map();
-const onlineUsers = new Map(); // Track all online users
+const onlineUsers = new Map();
 
 // Function to broadcast online users count
 function broadcastOnlineStats() {
@@ -338,3 +339,6 @@ app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ message: 'Something went wrong!', error: err.message });
 });
+
+// Import and schedule the leaderboard cache clearing job
+import './jobs/clearLeaderboardCache.js';
