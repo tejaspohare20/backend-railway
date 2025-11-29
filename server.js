@@ -38,7 +38,8 @@ import progressRoutes from './routes/progress.js';
 import leaderboardRoutes from './routes/leaderboard.js';
 import achievementsRoutes from './routes/achievements.js';
 import microLearningRoutes from './routes/microLearning.js';
-import MicroLesson from './models/MicroLesson.js'; // Import to ensure model is registered
+// Import MicroLesson model to ensure it's registered - using explicit path
+import MicroLesson from './models/MicroLesson.js';
 import adminRoutes from './routes/admin.js';
 import contactsRoutes from './routes/contacts.js';
 
