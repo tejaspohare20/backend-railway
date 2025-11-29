@@ -7,8 +7,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build-frontend": "cd ../ && npm run build",
-    "postinstall": "npm run build-frontend"
+    "seed:microlessons": "node seedMicroLessons.js"
   },
   "keywords": [
     "ai",
@@ -28,6 +27,7 @@
     "groq-sdk": "^0.36.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.0.3",
+    "node-cron": "^3.0.3",
     "openai": "^4.20.1",
     "socket.io": "^4.6.0"
   },
