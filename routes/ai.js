@@ -51,18 +51,58 @@ router.post('/practice', authMiddleware, async (req, res) => {
 
     // Update user points
     const pointsEarned = Math.round(analysis.score / 10);
-    await User.findByIdAndUpdate(req.userId, {
+    const updatedUser = await User.findByIdAndUpdate(req.userId, {
       $inc: { totalPoints: pointsEarned }
-    });
+    }, { new: true });
+    
+    // Level progression system
+    // Level 1: 0-99 points
+    // Level 2: 100-199 points
+    // Level 3: 200-299 points
+    // Level 4: 300-399 points
+    // Level 5: 400+ points
+    // And so on...
+    const currentLevel = updatedUser.level;
+    const newLevel = Math.max(1, Math.floor(updatedUser.totalPoints / 100) + 1);
+    let leveledUp = false;
+    
+    if (newLevel > currentLevel) {
+      // User leveled up!
+      await User.findByIdAndUpdate(req.userId, {
+        level: newLevel
+      });
+      leveledUp = true;
+    }
 
     res.status(201).json({
       session,
       feedback: analysis.feedback,
       suggestions: analysis.suggestions,
-      pointsEarned
+      pointsEarned,
+      level: leveledUp ? newLevel : undefined, // Only send level if it increased
+      leveledUp: leveledUp
     });
   } catch (error) {
     res.status(500).json({ message: 'Failed to create session', error: error.message });
+  }
+});
+
+// Comprehensive feedback endpoint
+router.post('/comprehensive-feedback', authMiddleware, async (req, res) => {
+  try {
+    const { text } = req.body;
+
+    if (!text) {
+      return res.status(400).json({ message: 'Text is required' });
+    }
+
+    // Get comprehensive AI feedback
+    const feedback = await aiService.getComprehensiveFeedback(text);
+
+    res.json({ feedback });
+  } catch (error) {
+    console.error('Comprehensive feedback error:', error);
+    res.status(500).json({ message: 'Failed to get comprehensive feedback', error: error.message });
   }
 });
 

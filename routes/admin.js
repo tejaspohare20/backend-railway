@@ -1,5 +1,6 @@
 import express from 'express';
 import { authMiddleware } from '../middleware/auth.js';
+import { adminMiddleware } from '../middleware/admin.js';
 import User from '../models/User.js';
 import PracticeSession from '../models/PracticeSession.js';
 import Achievement from '../models/Achievement.js';
@@ -7,7 +8,7 @@ import Achievement from '../models/Achievement.js';
 const router = express.Router();
 
 // Get all users statistics
-router.get('/users/stats', authMiddleware, async (req, res) => {
+router.get('/users/stats', adminMiddleware, async (req, res) => {
   try {
     // Get total users count
     const totalUsers = await User.countDocuments();
@@ -30,9 +31,9 @@ router.get('/users/stats', authMiddleware, async (req, res) => {
     // Get total achievements unlocked
     const totalAchievements = await Achievement.countDocuments();
 
-    // Get all users with their activity
+    // Get all users with their activity (excluding email for security)
     const users = await User.find()
-      .select('username email totalPoints level createdAt')
+      .select('username totalPoints level createdAt')
       .sort({ createdAt: -1 })
       .limit(50);
 
@@ -44,110 +45,85 @@ router.get('/users/stats', authMiddleware, async (req, res) => {
         totalSessions,
         totalAchievements
       },
-      recentUsers: users
+      users
     });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch user stats', error: error.message });
+    res.status(500).json({ message: 'Failed to fetch admin stats', error: error.message });
   }
 });
 
-// Get individual user details
-router.get('/users/:userId', authMiddleware, async (req, res) => {
+// Get analytics overview
+router.get('/analytics/overview', adminMiddleware, async (req, res) => {
   try {
-    const { userId } = req.params;
+    // Get top users by points (excluding email for security)
+    const topUsers = await User.find()
+      .select('username totalPoints level')
+      .sort({ totalPoints: -1 })
+      .limit(10);
 
-    const user = await User.findById(userId).select('-password');
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
-
-    // Get user's practice sessions
-    const sessions = await PracticeSession.find({ userId })
+    // Get recent practice sessions
+    const recentSessions = await PracticeSession.find()
+      .populate('userId', 'username') // Only populate username, not email
       .sort({ date: -1 })
       .limit(10);
 
-    // Get user's achievements
-    const achievements = await Achievement.find({ userId });
-
     res.json({
-      user,
-      sessions,
-      achievements,
-      activity: {
-        totalSessions: sessions.length,
-        totalAchievements: achievements.length
-      }
+      topUsers,
+      recentSessions
     });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch user details', error: error.message });
+    res.status(500).json({ message: 'Failed to fetch analytics', error: error.message });
   }
 });
 
-// Get activity logs (recent sessions across all users)
-router.get('/activity/recent', authMiddleware, async (req, res) => {
+// Get recent activity
+router.get('/activity/recent', adminMiddleware, async (req, res) => {
   try {
+    // Get recent practice sessions with user info (excluding email for security)
     const recentSessions = await PracticeSession.find()
+      .populate('userId', 'username') // Only populate username, not email
       .sort({ date: -1 })
-      .limit(20)
-      .populate('userId', 'username email');
+      .limit(20);
 
-    res.json({ recentSessions });
+    res.json({
+      recentSessions
+    });
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch recent activity', error: error.message });
   }
 });
 
-// Get platform analytics
-router.get('/analytics/overview', authMiddleware, async (req, res) => {
+// Clear leaderboard cache
+router.post('/leaderboard/clear-cache', adminMiddleware, async (req, res) => {
   try {
-    // Users growth over last 30 days
-    const last30Days = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    // Import the leaderboard cache and clear it
+    const { leaderboardCache } = await import('../routes/leaderboard.js');
+    leaderboardCache.clear();
     
-    const userGrowth = await User.aggregate([
-      {
-        $match: { createdAt: { $gte: last30Days } }
-      },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
-          count: { $sum: 1 }
-        }
-      },
-      {
-        $sort: { _id: 1 }
-      }
-    ]);
-
-    // Session activity over last 30 days
-    const sessionActivity = await PracticeSession.aggregate([
-      {
-        $match: { date: { $gte: last30Days } }
-      },
-      {
-        $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
-          count: { $sum: 1 },
-          avgScore: { $avg: "$score" }
-        }
-      },
-      {
-        $sort: { _id: 1 }
-      }
-    ]);
-
-    // Top performing users
-    const topUsers = await User.find()
-      .sort({ totalPoints: -1 })
-      .limit(10)
-      .select('username email totalPoints level');
-
-    res.json({
-      userGrowth,
-      sessionActivity,
-      topUsers
-    });
+    res.json({ message: 'Leaderboard cache cleared successfully' });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to fetch analytics', error: error.message });
+    res.status(500).json({ message: 'Failed to clear leaderboard cache', error: error.message });
+  }
+});
+
+// Make user an admin (for development/testing purposes)
+router.post('/make-admin', authMiddleware, async (req, res) => {
+  try {
+    const { username } = req.body;
+    
+    // Find the user
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Make the user an admin
+    user.isAdmin = true;
+    await user.save();
+    
+    res.json({ message: `${user.username} is now an admin` });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to make user admin', error: error.message });
   }
 });
 

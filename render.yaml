@@ -4,4 +4,4 @@ services:
     env: node
     buildCommand: npm install
     startCommand: node server.js
-    rootDir: .
+    rootDir: backend

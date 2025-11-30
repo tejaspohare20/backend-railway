@@ -27,4 +27,7 @@ const achievementSchema = new mongoose.Schema({
   }
 });
 
+// Add indexes for better query performance
+achievementSchema.index({ category: 1 });
+
 export default mongoose.model('Achievement', achievementSchema);

@@ -28,9 +28,19 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 1
   },
+  isAdmin: {
+    type: Boolean,
+    default: false
+  },
   achievements: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Achievement'
+    achievementId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Achievement'
+    },
+    unlockedAt: {
+      type: Date,
+      default: Date.now
+    }
   }],
   contacts: [{
     userId: {
@@ -65,10 +75,23 @@ const userSchema = new mongoose.Schema({
       default: Date.now
     }
   }],
+  completedMicroLessons: [{
+    lessonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'MicroLesson'
+    },
+    completedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   createdAt: {
     type: Date,
     default: Date.now
   }
 });
+
+// Add indexes for better query performance (only add ones not already defined by schema options)
+userSchema.index({ totalPoints: -1 });
 
 export default mongoose.model('User', userSchema);

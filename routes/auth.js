@@ -71,7 +71,8 @@ router.post('/register', async (req, res) => {
         username: user.username,
         email: user.email,
         totalPoints: user.totalPoints,
-        level: user.level
+        level: user.level,
+        isAdmin: user.isAdmin
       }
     });
   } catch (error) {
@@ -135,7 +136,8 @@ router.post('/login', async (req, res) => {
         username: user.username,
         email: user.email,
         totalPoints: user.totalPoints,
-        level: user.level
+        level: user.level,
+        isAdmin: user.isAdmin
       }
     });
   } catch (error) {
@@ -165,7 +167,8 @@ router.get('/profile', authMiddleware, async (req, res) => {
         username: user.username,
         email: user.email,
         totalPoints: user.totalPoints,
-        level: user.level
+        level: user.level,
+        isAdmin: user.isAdmin
       }
     });
   } catch (error) {

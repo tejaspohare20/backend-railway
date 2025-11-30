@@ -35,4 +35,7 @@ const practiceSessionSchema = new mongoose.Schema({
   }
 });
 
+// Add indexes for better query performance
+practiceSessionSchema.index({ userId: 1, date: -1 });
+
 export default mongoose.model('PracticeSession', practiceSessionSchema);
