@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema({
     type: Number,
     default: 1
   },
+  streak: {
+    type: Number,
+    default: 0
+  },
   isAdmin: {
     type: Boolean,
     default: false
@@ -83,6 +87,31 @@ const userSchema = new mongoose.Schema({
     completedAt: {
       type: Date,
       default: Date.now
+    },
+    reviewDate: {
+      type: Date
+    },
+    interval: {
+      type: Number,
+      default: 1 // Days until next review
+    },
+    easeFactor: {
+      type: Number,
+      default: 2.5 // Ease factor for spaced repetition
+    },
+    repetitions: {
+      type: Number,
+      default: 0
+    }
+  }],
+  // Track lessons that need review based on spaced repetition
+  lessonsToReview: [{
+    lessonId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'MicroLesson'
+    },
+    dueDate: {
+      type: Date
     }
   }],
   createdAt: {

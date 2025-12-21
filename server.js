@@ -61,16 +61,30 @@ const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
   cors: {
-    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://vercel-frontend-phi-one.vercel.app", "https://frontend-one-delta-75.vercel.app", "https://frontend-afhi.vercel.app", "https://frontend-xz1t.vercel.app", "https://frontend-vercel-ws88.vercel.app"],
-    methods: ["GET", "POST"]
+    origin: ["http://localhost:3000", "http://localhost:3001", "http://localhost:5173", "https://frontend1-two-sigma.vercel.app", "https://ackend2-tejaspohare209158-yi66gewb.leapcell.dev"],
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
 // Middleware
-app.use(cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'http://localhost:3001', 'https://vercel-frontend-phi-one.vercel.app', 'https://frontend-one-delta-75.vercel.app', 'https://frontend-afhi.vercel.app', 'https://frontend-xz1t.vercel.app', 'https://frontend-vercel-ws88.vercel.app'],
-  credentials: true
-}));
+// Configure CORS with more explicit settings
+const corsOptions = {
+  origin: [
+    'http://localhost:5173', 
+    'http://localhost:3000', 
+    'http://localhost:3001', 
+    'https://frontend1-two-sigma.vercel.app',
+    'https://ackend2-tejaspohare209158-yi66gewb.leapcell.dev'
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200 // Some legacy browsers (IE11, various SmartTVs) choke on 204
+};
+
+app.use(cors(corsOptions));
+
+// Handle preflight requests for all routes
+app.options('*', cors(corsOptions));
 app.use(express.json());
 
 // Request logging middleware
@@ -79,11 +93,55 @@ app.use((req, res, next) => {
   next();
 });
 
+// Add CORS headers manually to all responses as a fallback
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'http://localhost:5173', 
+    'http://localhost:3000', 
+    'http://localhost:3001', 
+    'https://frontend1-two-sigma.vercel.app',
+    'https://ackend2-tejaspohare209158-yi66gewb.leapcell.dev'
+  ];
+  
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else if (origin === 'https://frontend1-two-sigma.vercel.app') {
+    // Explicitly allow the Vercel frontend
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.header('Access-Control-Allow-Origin', origin);
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.sendStatus(200);
+    return;
+  }
+  
+  next();
+});
+
 // MongoDB Connection
 if (process.env.MONGODB_URI) {
-  mongoose.connect(process.env.MONGODB_URI)
+  // Add connection options for better reliability
+  const connectionOptions = {
+    serverSelectionTimeoutMS: 5000, // Timeout after 5s
+    socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+    maxPoolSize: 10 // Limit connection pool size
+  };
+
+  mongoose.connect(process.env.MONGODB_URI, connectionOptions)
     .then(() => console.log('✅ MongoDB connected successfully'))
-    .catch((err) => console.error('❌ MongoDB connection error:', err));
+    .catch((err) => {
+      console.error('❌ MongoDB connection error:', err);
+      console.error('Please check:\n1. Your MongoDB Atlas cluster is running\n2. IP whitelist includes your server\n3. Username and password are correct\n4. Network connectivity to MongoDB Atlas');
+    });
 
   // Add connection event listeners for better debugging
   mongoose.connection.on('connected', () => {
@@ -92,16 +150,60 @@ if (process.env.MONGODB_URI) {
 
   mongoose.connection.on('error', (err) => {
     console.error('Mongoose connection error:', err);
+    // Try to reconnect after 5 seconds
+    setTimeout(() => {
+      mongoose.connect(process.env.MONGODB_URI, connectionOptions)
+        .then(() => console.log('✅ MongoDB reconnected successfully'))
+        .catch((err) => console.error('❌ MongoDB reconnection failed:', err));
+    }, 5000);
   });
 
   mongoose.connection.on('disconnected', () => {
     console.log('Mongoose disconnected');
+  });
+
+  // Handle process termination
+  process.on('SIGINT', async () => {
+    await mongoose.connection.close();
+    console.log('Mongoose connection closed due to app termination');
+    process.exit(0);
   });
 } else {
   console.error('❌ MONGODB_URI is not defined in environment variables');
 }
 
 // Routes
+// Add CORS headers for auth routes
+app.use('/api/auth', (req, res, next) => {
+  // Set CORS headers explicitly for auth routes
+  const origin = req.headers.origin;
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'https://frontend1-two-sigma.vercel.app',
+    'https://ackend2-tejaspohare209158-yi66gewb.leapcell.dev'
+  ];
+  
+  if (allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  } else if (origin === 'https://frontend1-two-sigma.vercel.app') {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(200);
+    return;
+  }
+  
+  next();
+});
+
 app.use('/api/auth', authRoutes);
 if (aiRoutes) {
   app.use('/api/ai', aiRoutes);
@@ -154,7 +256,49 @@ if (process.env.NODE_ENV === 'production') {
 
 // Add a health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
+  // Set CORS headers explicitly for this endpoint
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.status(200).json({ 
+    status: 'OK', 
+    timestamp: new Date().toISOString(),
+    mongodb: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
+  });
+});
+
+// Add a dedicated MongoDB health check endpoint
+app.get('/health/mongodb', async (req, res) => {
+  try {
+    if (mongoose.connection.readyState === 1) {
+      // Run a simple query to test connectivity
+      await mongoose.connection.db.admin().ping();
+      res.status(200).json({ 
+        status: 'Connected', 
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(503).json({ 
+        status: 'Disconnected', 
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    res.status(503).json({ 
+      status: 'Error', 
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Add a test CORS endpoint
+app.get('/test-cors', (req, res) => {
+  // Set CORS headers explicitly for this endpoint
+  res.header('Access-Control-Allow-Origin', 'https://frontend1-two-sigma.vercel.app');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.status(200).json({ message: 'CORS headers set successfully', timestamp: new Date().toISOString() });
 });
 
 const PORT = process.env.PORT || 5002;

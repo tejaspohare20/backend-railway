@@ -112,12 +112,18 @@ router.get('/update', authMiddleware, async (req, res) => {
     
     // Get last practice date
     const lastPracticeDate = sessions.length > 0 ? sessions[0].date : null;
+    
+    // Count lessons due for review
+    const today = new Date();
+    const lessonsToReview = user.lessonsToReview ? 
+      user.lessonsToReview.filter(review => review.dueDate <= today).length : 0;
 
     const progress = {
       totalMinutes,
       sessionCount,
       streakDays,
       completedLessons,
+      lessonsToReview,
       lastPracticeDate
     };
 
@@ -222,6 +228,47 @@ router.get('/sessions/:id', authMiddleware, async (req, res) => {
     res.json({ session });
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch session details', error: error.message });
+  }
+});
+
+// Get spaced repetition analytics
+router.get('/spaced-repetition', authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    // Total completed lessons
+    const totalCompletedLessons = user.completedMicroLessons ? user.completedMicroLessons.length : 0;
+    
+    // Lessons due for review
+    const today = new Date();
+    const lessonsToReview = user.lessonsToReview ? 
+      user.lessonsToReview.filter(review => review.dueDate <= today).length : 0;
+    
+    // Upcoming reviews
+    const upcomingReviews = user.lessonsToReview ? 
+      user.lessonsToReview
+        .filter(review => review.dueDate > today)
+        .sort((a, b) => a.dueDate - b.dueDate)
+        .slice(0, 5)
+        .map(review => ({
+          dueDate: review.dueDate,
+          lessonId: review.lessonId
+        })) : [];
+    
+    // Calculate retention rate (simplified)
+    // In a real implementation, this would be based on quiz scores over time
+    const retentionRate = totalCompletedLessons > 0 ? 
+      Math.min(100, Math.round((totalCompletedLessons - lessonsToReview) / totalCompletedLessons * 100)) : 0;
+    
+    res.json({
+      totalCompletedLessons,
+      lessonsToReview,
+      retentionRate,
+      upcomingReviews
+    });
+  } catch (error) {
+    console.error('Failed to fetch spaced repetition analytics:', error);
+    res.status(500).json({ message: 'Failed to fetch spaced repetition analytics', error: error.message });
   }
 });
 

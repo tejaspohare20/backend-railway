@@ -72,6 +72,7 @@ router.post('/register', async (req, res) => {
         email: user.email,
         totalPoints: user.totalPoints,
         level: user.level,
+        streak: user.streak,
         isAdmin: user.isAdmin
       }
     });
@@ -137,6 +138,7 @@ router.post('/login', async (req, res) => {
         email: user.email,
         totalPoints: user.totalPoints,
         level: user.level,
+        streak: user.streak,
         isAdmin: user.isAdmin
       }
     });
@@ -168,6 +170,7 @@ router.get('/profile', authMiddleware, async (req, res) => {
         email: user.email,
         totalPoints: user.totalPoints,
         level: user.level,
+        streak: user.streak,
         isAdmin: user.isAdmin
       }
     });
